@@ -7,16 +7,18 @@ public class Player : MonoBehaviour
 {
     Rigidbody2D PlayerRB;
     Animator PlayerAM;
+    CapsuleCollider2D PlayerCC;
     public float Speed;
     public float JumpForce;
     bool isGround;
-
-    GameObject RayCasted_Ground;
+    bool isMainGround;
+    float JumpCooltime;
 
     void Awake()
     {
         PlayerRB = GetComponent<Rigidbody2D>();
         PlayerAM = GetComponent<Animator>();
+        PlayerCC = GetComponent<CapsuleCollider2D>();
 
         // 스피드 설정 안되면 자동 초기화
         if (Speed == 0)
@@ -24,7 +26,7 @@ public class Player : MonoBehaviour
 
         // 점프 설정 안되면 자동 초기화
         if (JumpForce == 0)
-            JumpForce = 10;
+            JumpForce = 9.4f;
     }
 
 
@@ -34,33 +36,57 @@ public class Player : MonoBehaviour
         KeyBoardInput();
         DrawRayCheckGround();
 
+        if (JumpCooltime > 0)
+            JumpCooltime -= Time.deltaTime;
+        else
+            if (PlayerCC.isTrigger)
+                PlayerCC.isTrigger = false;
+
+        Debug.Log(isMainGround);
     }
 
-    private void DrawRayCheckGround()
+    void DrawRayCheckGround()
     {
-        Collider2D r;
 
+        Debug.DrawRay(PlayerRB.position + new Vector2(-0.16f * transform.localScale.x, 0), Vector2.down, new Color(0, 1, 0));
+        RaycastHit2D rayHit = Physics2D.Raycast(PlayerRB.position + new Vector2(-0.16f * transform.localScale.x, 0), Vector2.down, 1, LayerMask.GetMask("Ground"));
+        RaycastHit2D rHMainGround = Physics2D.Raycast(PlayerRB.position + new Vector2(-0.16f * transform.localScale.x, 0), Vector2.down, 1, LayerMask.GetMask("MainGround"));
 
-        Debug.DrawRay(PlayerRB.position, Vector2.down, new Color(0, 1, 0));
-        RaycastHit2D rayHit = Physics2D.Raycast(PlayerRB.position, Vector2.down, 1, LayerMask.GetMask("Ground"));
         if (rayHit.collider != null)
-        {
-            RayCasted_Ground = rayHit.collider.gameObject;
-
-            r = RayCasted_Ground.GetComponent<Collider2D>();
-            if (r.isTrigger)
-                r.isTrigger = false;
-        }
+            if (rayHit.distance < 0.6f)
+            {
+                if (PlayerRB.velocity.y < 0)
+                {
+                    isGround = true;
+                    PlayerAM.SetBool("Jump", false);
+                }
+            }
+            else
+            {
+                isGround = false;
+                PlayerAM.SetBool("Jump", true);
+            }
+        else if(rHMainGround.collider != null)
+            if (rHMainGround.distance < 0.6f)
+            {
+                if (PlayerRB.velocity.y < 0)
+                {
+                    isGround = true;
+                    isMainGround = true;
+                    PlayerAM.SetBool("Jump", false);
+                }
+            }
+            else
+            {
+                isGround = false;
+                isMainGround = false;
+                PlayerAM.SetBool("Jump", true);
+            }
         else
         {
-            if (RayCasted_Ground != null)
-            {
-                r = RayCasted_Ground.GetComponent<Collider2D>();
-                if (!r.isTrigger)
-                    r.isTrigger = true;
-                RayCasted_Ground = null;
-            }
-
+            isGround = false;
+            isMainGround = false;
+            PlayerAM.SetBool("Jump", true);
         }
     }
 
@@ -78,36 +104,32 @@ public class Player : MonoBehaviour
             // 애니메이션
             PlayerAM.SetBool("Run", true);
             PlayerAM.speed = Speed/3.3f;
-
         }
         else
         {
             PlayerAM.SetBool("Run", false);
             PlayerAM.speed = 1;
-
         }
 
-        // 점프
-        if (Input.GetKeyDown(KeyCode.UpArrow) && isGround)
+        // 점프     
+        if (!Input.GetKey(KeyCode.DownArrow) && Input.GetKey(KeyCode.LeftAlt) && isGround && JumpCooltime <= 0)
         {
             PlayerRB.velocity = new Vector2(0, JumpForce);
+            JumpCooltime = 0.35f;
         }
+
+        // 하강 점프  ( 메인 그라운드가 아닐때만 사용가능 )
+        if (Input.GetKey(KeyCode.DownArrow) && Input.GetKey(KeyCode.LeftAlt) && isGround && JumpCooltime <= 0)
+        {
+            if (!isMainGround && PlayerRB.velocity.y >= 0) 
+            {
+                PlayerRB.velocity = new Vector2(0, 4);
+                PlayerCC.isTrigger = true;
+                JumpCooltime = 0.35f;
+            }
+        }
+
+        
     }
 
-    void OnCollisionEnter2D(Collision2D collision)
-    {
-        if (collision.gameObject.tag == "Ground")
-        {
-            isGround = true;
-            PlayerAM.SetBool("Jump", false);
-        }
-    }
-    void OnCollisionExit2D(Collision2D collision)
-    {
-        if (collision.gameObject.tag == "Ground")
-        {
-            isGround = false;
-            PlayerAM.SetBool("Jump", true);
-        }
-    }
 }
